@@ -1,0 +1,343 @@
+---
+title: "01_cleanOccurrences"
+author: "Daniela Linero"
+date: "9/7/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = FALSE)
+knitr::opts_knit$set(root.dir = "F:/Connectivity/data/01_cleanOccurrences")
+```
+
+
+```{r libraries, warning=FALSE, message=FALSE}
+# Load libraries
+library(tidyverse) # For data wrangling
+library(data.table) # To load multiple files at once
+library(Hmisc) # For the %nin% operator 
+library(CoordinateCleaner) # To flag records with erroneous coordinates
+library(countrycode) # Associated with coordinate cleaner
+library(rgdal) # To handle vector data 
+library(sp) # To handle vector data 
+library(knitr) # For markdown files
+```
+
+
+### 1. Load ocurrences of all species from ebird
+
+
+```{r load data, warning=FALSE}
+data <- 
+  list.files(pattern = "*.txt") %>% 
+  map_df(~fread(., encoding = 'UTF-8'))
+```
+
+### 2. Remove some species that had wrong information about home ranges
+
+```{r remove species}
+data <- data %>% 
+  filter(`SCIENTIFIC NAME` %nin% c("Campylorhynchus nuchalis", "Chlorochrysa phoenicotis")) %>% droplevels()
+```
+
+### 3. Delete records with certain protocols 
+
+```{r protocols}
+
+# Select travelling, stationary and area protocols  
+data <- data %>% 
+  filter(`PROTOCOL TYPE` %in% c("Traveling", "Stationary", "Area")) %>% 
+  droplevels()
+
+```
+
+###  4. Delete records with routes longer than 3 km and periods longer than 4 hours 
+
+```{r km and hours}
+
+data <- data %>% 
+  filter(!is.na(`DURATION MINUTES`) & `DURATION MINUTES` <= 240)%>% 
+  filter(!is.na(`EFFORT DISTANCE KM`) & `EFFORT DISTANCE KM` <= 3) %>% 
+  droplevels()
+
+
+#plot data to get an overview
+wm <- borders("world", colour="gray50", fill="gray50")
+ggplot()+ coord_fixed()+ wm +
+  geom_point(data = data, aes(x = LONGITUDE, y = LATITUDE),
+             colour = "darkred", size = 0.5)+
+  theme_bw()
+
+```
+
+### 5. Remove duplicates
+
+
+```{r duplicates}
+
+data <- data %>%
+  
+  # Remove records that have the same combination of the following variables 
+  distinct(LONGITUDE,LATITUDE,`SCIENTIFIC NAME`,`OBSERVATION DATE`,`TIME OBSERVATIONS STARTED`, `DURATION MINUTES`, `OBSERVATION COUNT`, .keep_all = TRUE) 
+
+```
+
+### 6. Coordinate cleaner 
+
+```{r coordinateCleaner, warning=FALSE}
+#convert country code from ISO2c to ISO3c
+data$ISO3 <-  countrycode(data$`COUNTRY CODE`, origin =  'iso2c', destination = 'iso3c')
+
+
+#flag suspicious records using the most common tests
+flags <- clean_coordinates(x = data, 
+                           lon = "LONGITUDE", 
+                           lat = "LATITUDE",
+                           countries = "ISO3",
+                           species = "SCIENTIFIC NAME",
+                           tests = c("capitals", "centroids", "equal","gbif", "institutions",
+                                     "zeros", "countries", "seas")) 
+
+# Summary of the number of flagged records
+summary(flags)
+# Plot flagged records
+plot(flags, lon = "LONGITUDE", lat = "LATITUDE")
+```
+
+
+```{r flagged records, eval=FALSE}
+# Create a dataset with the flagged records
+flagged_coordinates <- flags[!flags$.summary,]
+
+# Export to examine in ArcGIS Pro
+write.csv(flagged_coordinates, "F:/Connectivity/outputs/01_cleanOcurrences/flaggedCoordinates.csv", row.names = FALSE)
+
+```
+
+After revising the records manually in ArcGIS Pro:
+
+- 1. None of the records falls exactly in the centroid of the capitals, but there area various that are within the 10 km buffer. We will check if these records belong to species that are present in the capitals. 
+
+  - Belize - Belmopan: Crypturellus soui (), Micrastur semitorquatus (), Pseudastur albicollis (). 
+  
+  - Guatemala - Guatemala city: Henicorhina leucophrys (), Micrastur semitorquatus (YES, https://chm.cbd.int/api/v2013/documents/7023F81E-EFBD-F578-8B84-4E4045E2E8A3/attachments/Cat%C3%A1logo%20aves%20metropolitana%20GT%20.pdf)
+  
+  - El Salvador - San Salvador: Micrastur semitorquatus (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=SVss)
+  
+  - Nicaragua - Managua: Micrastur semitorquatus (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=NImnmn)
+  
+  - Honduras - 	Tegucigalpa: Micrastur semitorquatus ().
+  
+  - Costa Rica - San José: Crypturellus soui (YES), Henicorhina leucophrys (YES), Micrastur semitorquatus (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=CRsj).
+  
+  - Panama - Panama City: Crypturellus soui (), Micrastur semitorquatus (), Pseudastur albicollis ().
+  
+  - Colombia - Bogota: Buteo albigula (YES), Campephilus pollens (YES), Henicorhina leucophrys (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=CObo). 
+  
+  - Venezuela - Caracas: Ara macao (YES - https://www.researchgate.net/publication/338169873_AVIFAUNA_DE_ZONAS_VERDES_DE_LA_CIUDAD_DE_CARACAS_VENEZUELA_UN_ESTUDIO_COMPARATIVO), Crypturellus erythropus (), Crypturellus soui (), Henicorhina leucophrys (), Henicorhina squamulatus (), Pseudastur albicollis (), Spizaetus ornatus (). 
+  
+  - Trinidad and Tobago - Port of Spain: Crypturellus soui (YES), Pseudastur albicollis (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=TTps).
+  
+  - Guyana - Georgetown: Pseudastur albicollis (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=GYdegm).
+  
+  - Ecuador - Quito: Buteo albigula (YES), Henicorhina leucophrys (YES), Spizaetus isidori (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=ECpipiqu). 
+  
+  - Bolivia - La paz: Buteo albigula (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=BOlp).
+  
+  - Chile - Santiago de Chile: Buteo albigula (YES - https://avibase.bsc-eoc.org/checklist.jsp?region=CLrm).
+
+
+- 2. None of the records falls exactly in the centroid of countries and provinces. 
+
+- 3. The discrepancies between the coordinates and the names of the countries are due to the fact that the records are located on the border of a country or on the coast.
+
+
+```{r gaps map 1, fig.cap="Fig 1. Scheme representing the main steps of the Locating KBAs workflow", echo=FALSE, out.width = '80%', fig.align="center"}
+knitr::include_graphics("F:/Connectivity/data/01_cleanOccurrences/coun_cleanCoordinates.png")
+```
+
+- 4. We will remove the coordinates assigned to  zoos, botanical gardens, herbaria, universities and museums
+
+```{r institutions}
+data <- flags %>%
+  filter(.inst == TRUE) %>%
+  droplevels()
+```
+
+
+### 7. Species distributions
+
+Now we will remove the records that fall outside the species distributions (with a ~10 km buffer). For Colombia, we will use the [Biomodelos distributions](http://biomodelos.humboldt.org.co/es). For the species that had multiple hypothesis, we used the distribution maps of Ayerbe, and for those that do not have a Biomodelos distribution, we will use the IUCN distribution. 
+
+*To see the code for merging the Biomodelos and IUCN distribution refer to the ArcGIS Pro notebook called  "Biomodelos_and_IUCN"*
+
+#### 7.1. Biomodelos and IUCN
+
+```{r bio + iucn, warning=FALSE}
+# Load the merged IUCN and biomodelos distributions for all sp
+Bio_IUCN <- readOGR("F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN", layer = "ALL_sp", verbose = TRUE)
+
+# Since the cc_iucn requires to project the coordinates when applying a buffer, 
+# we will upload the distributions with a geodesic buffer of 0.1° (~ 10km) produced in ArcGIS Pro. 
+
+Bio_IUCN_buffer <- readOGR("F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN", layer = "ALL_sp_buffer", verbose = TRUE)
+
+# Add a column named binomial to the ebird datase, since is the column that the 
+# shapefile has 
+data_Bio_IUCN <- data %>% 
+  
+  mutate(BINOMIAL = `SCIENTIFIC NAME`) %>%
+  
+  # Include only the species that had a unique Biomodelos distribution
+  filter(BINOMIAL %in% c("Ara macao", "Ara militaris", "Buteo albigula", "Campephilus pollens", "Crypturellus erythropus", "Crypturellus kerriae",   
+ "Crypturellus soui", "Grallaria hypoleuca", "Grallaria nuchalis",     
+"Henicorhina leucophrys", "Micrastur semitorquatus", "Mitu salvini",            
+"Mitu tomentosum", "Phaethornis malaris",  "Picumnus lafresnayi",    
+"Picumnus squamulatus", "Pyrrhura melanura", "Spizaetus ornatus" )) %>%
+  
+  droplevels()
+
+# Remove records that fall outside the distribution with the 0.1° buffer 
+data_Bio_IUCN_clean <- cc_iucn(x = data_Bio_IUCN, 
+                range = Bio_IUCN_buffer, 
+                lon = "LONGITUDE", 
+                lat = "LATITUDE",
+                species = "BINOMIAL",
+                verbose = TRUE)
+```
+
+
+```{r check1,  eval=FALSE, echo= FALSE}
+# check 
+write.csv(data_Bio_IUCN, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/COMPLETE_RECORDS_EBIRD.csv", row.names = FALSE)
+write.csv(data_Bio_IUCN_clean, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/CLEANED_RECORDS_EBIRD.csv", row.names = FALSE)
+
+
+
+```
+
+
+#### 7.2. Ayerbe and IUCN
+
+
+```{r ayerbe + iucn, warning=FALSE}
+# Load the merged IUCN and ayerbe distributions for all sp with a 0.1° buffer
+
+Aye_IUCN_buffer <- readOGR("F:/Connectivity/data/species_distributions/Ayerbe_and_IUCN", layer = "ALL_sp_buffer", verbose = TRUE)
+
+# Add a column named binomial to the ebird datase, since is the column that the 
+# shapefile has 
+data_Aye_IUCN <- data %>% 
+  
+  mutate(BINOMIAL = `SCIENTIFIC NAME`) %>%
+  
+  # Include only the species that had multiple or non Biomodelos distribution and had an Ayerbe distribution
+  filter(BINOMIAL %in% c("Myioborus flavivertex", "Grallaria flavotincta", "Picumnus cinnamomeus", "Odontophorus hyperythrus", "Crypturellus berlepschi", "Tangara johannae", "Ramphastos brevis", "Spizaetus isidori", "Pseudastur albicollis", "Hypopyrrhus pyrohypogaster", "Patagioenas goodsoni", "Ognorhynchus icterotis")) %>%
+  
+  droplevels()
+
+# Remove records that fall outside the distribution with the 0.1° buffer 
+data_Aye_IUCN_clean <- cc_iucn(x = data_Aye_IUCN, 
+                range = Aye_IUCN_buffer, 
+                lon = "LONGITUDE", 
+                lat = "LATITUDE",
+                species = "BINOMIAL",
+                verbose = TRUE)
+```
+
+
+
+```{r check2,  eval=FALSE, echo= FALSE}
+# check 
+write.csv(data_Aye_IUCN, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/COMPLETE_RECORDS_AYE.csv", row.names = FALSE)
+write.csv(data_Aye_IUCN_clean, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/CLEANED_RECORDS_AYE.csv", row.names = FALSE)
+
+
+
+```
+
+
+#### 7.3. Only IUCN 
+
+
+```{r IUCN, warning=FALSE}
+# Only one species does not have a Biomodelos or Ayerbe distribution: Grallaria bangsi
+
+# Load the IUCN distribution with the 0.1° buffer
+IUCN_buffer <- readOGR("F:/Connectivity/data/species_distributions/IUCN", layer = "Grallaria_bangsi_buffer", verbose = TRUE)
+
+# Add a column named binomial to the ebird datase, since is the column that the 
+# shapefile has 
+data_IUCN <- data %>% 
+  
+  mutate(BINOMIAL = `SCIENTIFIC NAME`) %>%
+  
+  # Include only the species that had multiple or non Biomodelos distribution and had an Ayerbe distribution
+  filter(BINOMIAL == "Grallaria bangsi") %>%
+  
+  droplevels()
+
+# Remove records that fall outside the distribution with the 0.1° buffer 
+data_IUCN_clean <- cc_iucn(x = data_IUCN, 
+                range = IUCN_buffer, 
+                lon = "LONGITUDE", 
+                lat = "LATITUDE",
+                species = "BINOMIAL",
+                verbose = TRUE)
+```
+
+
+```{r check3,  eval=FALSE, echo= FALSE}
+# check 
+write.csv(data_IUCN, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/COMPLETE_RECORDS_IUCN.csv", row.names = FALSE)
+write.csv(data_IUCN_clean, "F:/Connectivity/data/species_distributions/Biomodelos_and_IUCN/CLEANED_RECORDS_IUCN.csv", row.names = FALSE)
+
+
+
+```
+
+#### 7.4. Bind all records
+
+Now, we will combine the three tables 
+
+```{r bind}
+
+data <- rbind(data_IUCN_clean, data_Aye_IUCN_clean, data_Bio_IUCN_clean)
+  
+```
+
+```{r export1, eval=FALSE}
+
+# Create a year field 
+data <- data %>% mutate("YEAR_OBSERVATION" = format(`OBSERVATION DATE`, format = "%Y"))
+
+write.csv(data, "F:/Connectivity/outputs/01_cleanOcurrences/cleanedData_phase1.csv", row.names = FALSE)
+
+```
+
+# 8. Divide before and after 2000
+
+```{r year, eval=FALSE}
+
+# Calculate total number of records per species, and number of records before and after 2000
+n_total <- data %>% group_by(`SCIENTIFIC NAME`) %>% dplyr::summarise(n_total = n())
+n_2000 <- data %>% filter(YEAR_OBSERVATION <= 2000) %>% droplevels() %>% group_by(`SCIENTIFIC NAME`) %>% summarise(n_before_2000 = n())
+n_2021 <- data %>% filter(YEAR_OBSERVATION > 2000) %>% droplevels() %>% group_by(`SCIENTIFIC NAME`) %>% summarise(n_after_2000 = n())
+
+n_species <- full_join(n_total, n_2021, by = "SCIENTIFIC NAME") %>% full_join(n_2000, by = "SCIENTIFIC NAME") 
+
+write.csv(n_species, "F:/Connectivity/outputs/01_cleanOcurrences/cleanedData_numberRecords_phase1.csv", row.names = FALSE)
+
+```
+
+```{r, eval=FALSE}
+# Remove records before 2000
+data <- data %>% filter(YEAR_OBSERVATION >= 2001) %>% droplevels()
+
+write.csv(data, "F:/Connectivity/outputs/01_cleanOcurrences/cleanedData_phase2.csv", row.names = FALSE)
+```
+
+
