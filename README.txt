@@ -1,6 +1,6 @@
 ## Mapping priority sites to improve protected areas connectivity and bird conservation in Colombia
-##### Daniela Linero, MSc - [National Audubon Society](https://www.audubon.org/) 
-##### Jorge Velásquez, Ph.D. - [National Audubon Society](https://www.audubon.org/) 
+##### Daniela Linero, MSc 
+##### Jorge Velásquez, Ph.D.
 \
 
 ### Project abstract
