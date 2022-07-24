@@ -1,16 +1,14 @@
-## Mapping priority sites to improve protected areas connectivity and bird conservation in Colombia
-##### Daniela Linero, MSc 
-##### Jorge Velásquez, Ph.D.
-\
+Mapping priority sites to improve protected areas connectivity and bird conservation in Colombia
+Daniela Linero, MSc 
+Jorge Velásquez, Ph.D.
+Camilo Correa-Ayram, Ph.D.
 
-### Project abstract
-***
+Project abstract
+
 Colombia's ecosystems are home to the highest richness of bird species worldwide, yet they are being lost rapidly due to the growing threats of climate and land-use change. The National Audubon Society seeks to counteract the effects of these threats by supporting the establishment of a representative and ecologically connected system of protected areas in Colombia. The purpose of this project is to identify, for the first time on a national scale, the most critical places for conserving and restoring the connectivity among Colombian protected areas. We will harness the power of Azure cloud computing to build high-resolution species distribution models for ten priority birds based on open-source occurrence data and environmental GIS layers. With the resulting maps, we will apply least-cost and circuit theory algorithms to model large-scale connectivity priorities among national and sub-national protected areas. The outcomes of this project will be critical to optimize the funds that will soon be invested by the National Audubon Society and partners for the creation and strengthening of protected areas in Colombia.
 
 
-### GitHub repository structure
-***
-
+GitHub repository structure
 
 ```
 ¦
@@ -44,9 +42,7 @@ Colombia's ecosystems are home to the highest richness of bird species worldwide
 
 ```
 
-
-### Contact
-***
+Contact
 
 Feel free to email us at daniela.linero@audubon.org and jorge.velasquez@audubon.org
 
