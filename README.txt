@@ -1,4 +1,4 @@
-Mapping priority sites to improve protected areas connectivity and bird conservation in Colombia
+## Mapping priority sites to improve protected areas connectivity and bird conservation in Colombia
 Daniela Linero, MSc 
 Jorge Velásquez, Ph.D.
 Camilo Correa-Ayram, Ph.D.
